@@ -21,6 +21,7 @@
 #include <SIM_JSBSim.h>
 #include <SIM_Tracker.h>
 #include <SIM_Balloon.h>
+#include <SIM_arducopter_sitl_ros.h>
 
 extern const AP_HAL::HAL& hal;
 
@@ -64,7 +65,8 @@ static const struct {
     { "jsbsim",    JSBSim::create },
     { "last_letter", last_letter::create },
     { "tracker",   Tracker::create },
-    { "balloon",   Balloon::create }
+    { "balloon",   Balloon::create },
+    { "arducopter_sitl_ros", arducopter_sitl_ros::create }
 };
 
 void SITL_State::_parse_command_line(int argc, char * const argv[])
