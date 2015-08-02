@@ -255,6 +255,11 @@ case $FRAME in
     IrisRos)
 	BUILD_TARGET="sitl"
 	;;
+    Gazebo)
+	BUILD_TARGET="sitl"
+        EXTRA_SIM="$EXTRA_SIM --frame=Gazebo"
+        MODEL="$FRAME"
+	;;
     CRRCSim-heli)
 	BUILD_TARGET="sitl-heli"
         MODEL="$FRAME"
@@ -282,7 +287,9 @@ if [ -n "$OVERRIDE_BUILD_TARGET" ]; then
 fi
 
 autotest="../Tools/autotest"
-[ -d "$autotest" ] && {
+[ -d "$autotest" ] || {
+    # we are not running from one of the standard vehicle directories. Use 
+    # the location of the sim_vehicle.sh script to find the path
     autotest=$(dirname $(readlink -e $0))
 }
 pushd $autotest/../../$VEHICLE || {
