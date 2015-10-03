@@ -522,6 +522,7 @@ private:
     AP_Float _visionFrameYaw;		// yaw angle between vision system frame and NED rad
     AP_Float _markerPosX;			// x position marker in vision frame
     AP_Float _markerPosY;			// y position marker in vision frame
+    AP_Float _msecVisionDelay; 		// effective average delay of vision measurements rel to IMU (msec)
 
     // Tuning parameters
     const float gpsNEVelVarAccScale;    // Scale factor applied to NE velocity measurement variance due to manoeuvre acceleration

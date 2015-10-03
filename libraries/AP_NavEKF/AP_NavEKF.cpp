@@ -45,6 +45,7 @@
 #define FLOW_MEAS_DELAY         10
 #define FLOW_NOISE_DEFAULT      0.25f
 #define FLOW_GATE_DEFAULT       3
+#define VISION_MEAS_DELAY         10
 
 #elif APM_BUILD_TYPE(APM_BUILD_APMrover2)
 // rover defaults
@@ -432,6 +433,15 @@ const AP_Param::GroupInfo NavEKF::var_info[] PROGMEM = {
     // @User: Advanced
     // @Units: meters
     AP_GROUPINFO("VPM_Y",    38, NavEKF, _markerPosY, 0.0f),
+
+    // @Param: VISION_DELAY
+    // @DisplayName: Vision measurement delay (msec)
+    // @Description: This is the number of msec that the vision messages lag behind the inertial measurements.
+    // @Range: 0 - 500
+    // @Increment: 10
+    // @User: Advanced
+    // @Units: milliseconds
+    AP_GROUPINFO("VISION_DELAY",    39, NavEKF, _msecVisionDelay, VISION_MEAS_DELAY),
 
     AP_GROUPEND
 };
@@ -2462,9 +2472,9 @@ void NavEKF::FuseVisionPosNED()
     observation[1] = worldVisionPos.y;
     observation[2] = worldVisionPos.z;
 
-    R_OBS[0] = sq(constrain_float(_visionHorizPosNoise, 0.05f, 5.0f));
+    R_OBS[0] = sq(constrain_float(_visionHorizPosNoise, 0.0f, 5.0f));
     R_OBS[1] = R_OBS[0];
-    R_OBS[2] = sq(constrain_float(_visionVerticalPosNoise,  0.05f, 5.0f));
+    R_OBS[2] = sq(constrain_float(_visionVerticalPosNoise,  0.0f, 5.0f));
 
     // fuse measurements sequentially
     for (obsIndex=0; obsIndex<=2; obsIndex++) {
@@ -4564,7 +4574,6 @@ void NavEKF::readHgtData()
             // This prevents negative baro disturbances due to copter downwash corrupting the EKF altitude during initial ascent
             hgtMea = max(hgtMea, meaHgtAtTakeOff);
         }
-
         // set flag to let other functions know new data has arrived
         newDataHgt = true;
         // time stamp used to check for new measurement
@@ -4681,7 +4690,7 @@ void  NavEKF::writeVisionPositionMeas(Vector3f &rawVisionPosition, Vector3f &raw
 	newDataVisionPosition = true;
 	visionPosValidMeaTime_ms = imuSampleTime_ms;
     // recall vehicle states at mid sample time for flow observations allowing for delays
-    RecallStates(statesAtVisionPosTime, imuSampleTime_ms - 100);
+    RecallStates(statesAtVisionPosTime, imuSampleTime_ms - _msecVisionDelay);
 }
 
 // calculate the NED earth spin vector in rad/sec
