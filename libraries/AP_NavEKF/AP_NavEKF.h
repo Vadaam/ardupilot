@@ -523,6 +523,7 @@ private:
     AP_Float _markerPosX;			// x position marker in vision frame
     AP_Float _markerPosY;			// y position marker in vision frame
     AP_Float _msecVisionDelay; 		// effective average delay of vision measurements rel to IMU (msec)
+    AP_Int8  _visionPosInnovGate;   // Number of standard deviations applied to vision position innovation consistency check
 
     // Tuning parameters
     const float gpsNEVelVarAccScale;    // Scale factor applied to NE velocity measurement variance due to manoeuvre acceleration
@@ -728,6 +729,7 @@ private:
     Vector3 innovVisionPos;            // innovation output for a group of measurements
     Vector3 varInnovVisionPos;         // innovation variance output for a group of measurements
     uint32_t visionPosValidMeaTime_ms;   // time stamp from latest valid vision measurement (msec)
+    uint32_t prevVisionFuseTime_ms;   // time vision measurement components passed their innovation consistency checks
     bool visionPositionDataValid;             // true while optical flow data is still fresh
     uint8_t visionPosUpdateCount;        // count of the number of minor state corrections using vision position data
     uint8_t visionPosUpdateCountMax;     // limit on the number of minor state corrections using vision position data

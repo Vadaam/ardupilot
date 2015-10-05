@@ -443,6 +443,14 @@ const AP_Param::GroupInfo NavEKF::var_info[] PROGMEM = {
     // @Units: milliseconds
     AP_GROUPINFO("VISION_DELAY",    39, NavEKF, _msecVisionDelay, VISION_MEAS_DELAY),
 
+    // @Param: VISPOS_GATE
+    // @DisplayName: Vision position measurement gate size
+    // @Description: This parameter sets the number of standard deviations applied to the vision position measurement innovation consistency check. Decreasing it makes it more likely that good measurements will be rejected. Increasing it makes it more likely that bad measurements will be accepted.
+    // @Range: 1 100
+    // @Increment: 1
+    // @User: Advanced
+    AP_GROUPINFO("VISPOS_GATE",    40, NavEKF, _visionPosInnovGate, POS_GATE_DEFAULT),
+
     AP_GROUPEND
 };
 
@@ -544,6 +552,20 @@ void NavEKF::ResetPosition(void)
         storedStates[i].position.x = state.position.x;
         storedStates[i].position.y = state.position.y;
     }
+}
+
+// resets position states to last vision measurement
+void NavEKF::ResetVisionPosition(void)
+{
+    statesAtVisionPosTime.quat.rotation_matrix(Tbn_vision);
+	worldVisionPos = markerposNED - Tbn_vision*visionPosition;
+
+	// write to state vector
+	state.position.x = worldVisionPos[0];
+	state.position.y = worldVisionPos[1];
+	// the estimated states at the last vision measurement are set equal to the GPS measurement to prevent transients on the first fusion
+	statesAtVisionPosTime.position.x = worldVisionPos[0];
+	statesAtVisionPosTime.position.y = worldVisionPos[1];
 }
 
 // Reset velocity states to last GPS measurement if available or to zero if in constant position mode or if PV aiding is not absolute
@@ -1064,20 +1086,30 @@ void NavEKF::SelectVisionPositionFusion()
     // Check if the visual position data is still valid
     visionPositionDataValid = ((imuSampleTime_ms - visionPosValidMeaTime_ms) < 1000);
 
+    // Check if the fusion has timed out (vision measurements have been rejected for too long)
+    bool visionFusionTimeout = ((imuSampleTime_ms - prevVisionFuseTime_ms) > 5000);
+
     // determine if conditions are right to start a new fusion cycle
     bool dataReady = statesInitialised && newDataVisionPosition && useVisionPosition() && visionPositionDataValid;
     if (dataReady) {
-        // reset state updates and counter used to spread fusion updates across several frames to reduce 10Hz pulsing
-//        memset(&visionPosIncrStateDelta[0], 0, sizeof(visionPosIncrStateDelta));
-//        visionPosUpdateCount = 0;
-        // ensure that the covariance prediction is up to date before fusing data
-        if (!covPredStep) CovariancePrediction();
-        // fuse the three magnetometer componenents sequentially
-        FuseVisionPosNED();
-        // reset flag to indicate that no new vision position data is available for fusion
-        newDataVisionPosition = false;
-        // indicate that flow fusion has been performed. This is used for load spreading.
-        visionPosFusePerformed = true;
+
+    	if (visionFusionTimeout)
+    	{
+    		//It means that vision target is re-acquired, so we should reset position to last vision positions.
+    		//Otherwise the step in innovation may cause problems with transients in other states.
+    		ResetVisionPostion()
+    	}
+    	else
+    	{
+			// ensure that the covariance prediction is up to date before fusing data
+			if (!covPredStep) CovariancePrediction();
+			// fuse the three magnetometer componenents sequentially
+			FuseVisionPosNED();
+			// reset flag to indicate that no new vision position data is available for fusion
+			newDataVisionPosition = false;
+			// indicate that flow fusion has been performed. This is used for load spreading.
+			visionPosFusePerformed = true;
+    	}
     }
 
     // Fuse corrections to quaternion, position and velocity states across several time steps to reduce 10Hz pulsing in the output
@@ -2451,7 +2483,7 @@ void NavEKF::FuseVisionPosNED()
 
     statesAtVisionPosTime.quat.rotation_matrix(Tbn_vision);
 
-	worldVisionPos = markerposNED - Tbn_vision*visionPosition; //prevTnb
+	worldVisionPos = markerposNED - Tbn_vision*visionPosition;
 
     uint8_t stateIndex;
     uint8_t obsIndex;
@@ -2476,51 +2508,64 @@ void NavEKF::FuseVisionPosNED()
     R_OBS[1] = R_OBS[0];
     R_OBS[2] = sq(constrain_float(_visionVerticalPosNoise,  0.0f, 5.0f));
 
-    // fuse measurements sequentially
     for (obsIndex=0; obsIndex<=2; obsIndex++) {
-
-    	stateIndex = 7 + obsIndex;
     	// calculate the measurement innovation, using states from a different time coordinate
     	innovVisionPos[obsIndex] = statesAtVisionPosTime.position[obsIndex] - observation[obsIndex];
-
-    	// calculate the Kalman gain and calculate innovation variances
-    	varInnovVisionPos[obsIndex] = P[stateIndex][stateIndex] + R_OBS[obsIndex];
-    	SK = 1.0f/varInnovVisionPos[obsIndex];
-
-    	for (uint8_t i= 0; i<=21; i++) {
-    		Kfusion[i] = 0.0f;
-    	}
-
-    	for (uint8_t i= 7; i<=9; i++) {
-    		Kfusion[i] = P[i][stateIndex]*SK;
-    	}
-
-    	// calculate state corrections
-    	for (uint8_t i = 7; i<=9; i++) {
-    		states[i] = states[i] - Kfusion[i] * innovVisionPos[obsIndex];
-
-    	}
-    	state.quat.normalize();
-
-    	// update the covariance - take advantage of direct observation of a single state at index = stateIndex to reduce computations
-    	// this is a numerically optimised implementation of standard equation P = (I - K*H)*P;
-    	for (uint8_t i= 0; i<=21; i++) {
-    		for (uint8_t j= 0; j<=21; j++)
-    		{
-    			KHP[i][j] = Kfusion[i] * P[stateIndex][j];
-    		}
-    	}
-    	for (uint8_t i= 0; i<=21; i++) {
-    		for (uint8_t j= 0; j<=21; j++) {
-    			P[i][j] = P[i][j] - KHP[i][j];
-    		}
-    	}
     }
 
+    float maxVisionPosInnov2 = sq(_visionPosInnovGate * _visionHorizPosNoise);
 
-    // force the covariance matrix to be symmetrical and limit the variances to prevent ill-condiioning.
-    ForceSymmetry();
-    ConstrainVariances();
+    float visionPosTestRatio = (sq(innovVisionPos[0]) + sq(innovVisionPos[1])) / maxPosInnov2;
+    visionPosHealth = ((visionPosTestRatio < 1.0f));
+
+    if (visionPosHealth)
+    {
+    	prevVisionFuseTime_ms = imuSampleTime_ms;
+    	// fuse measurements sequentially
+		for (obsIndex=0; obsIndex<=2; obsIndex++) {
+
+			stateIndex = 7 + obsIndex;
+
+
+			// calculate the Kalman gain and calculate innovation variances
+			varInnovVisionPos[obsIndex] = P[stateIndex][stateIndex] + R_OBS[obsIndex];
+			SK = 1.0f/varInnovVisionPos[obsIndex];
+
+			for (uint8_t i= 0; i<=21; i++) {
+				Kfusion[i] = 0.0f;
+			}
+
+			for (uint8_t i= 7; i<=9; i++) {
+				Kfusion[i] = P[i][stateIndex]*SK;
+			}
+
+			// calculate state corrections
+			for (uint8_t i = 7; i<=9; i++) {
+				states[i] = states[i] - Kfusion[i] * innovVisionPos[obsIndex];
+
+			}
+			state.quat.normalize();
+
+			// update the covariance - take advantage of direct observation of a single state at index = stateIndex to reduce computations
+			// this is a numerically optimised implementation of standard equation P = (I - K*H)*P;
+			for (uint8_t i= 0; i<=21; i++) {
+				for (uint8_t j= 0; j<=21; j++)
+				{
+					KHP[i][j] = Kfusion[i] * P[stateIndex][j];
+				}
+			}
+			for (uint8_t i= 0; i<=21; i++) {
+				for (uint8_t j= 0; j<=21; j++) {
+					P[i][j] = P[i][j] - KHP[i][j];
+				}
+			}
+		}
+
+
+		// force the covariance matrix to be symmetrical and limit the variances to prevent ill-condiioning.
+		ForceSymmetry();
+		ConstrainVariances();
+    }
 
     // stop performance timer
     perf_end(_perf_FuseVelPosNED);
