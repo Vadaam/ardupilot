@@ -416,6 +416,9 @@ private:
     // reset the horizontal position states uing the last GPS measurement
     void ResetPosition(void);
 
+    // reset the horizontal position states using the last vision measurement
+    void ResetVisionPosition(void);
+
     // reset velocity states using the last GPS measurement
     void ResetVelocity(void);
 

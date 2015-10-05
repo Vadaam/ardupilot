@@ -1097,7 +1097,7 @@ void NavEKF::SelectVisionPositionFusion()
     	{
     		//It means that vision target is re-acquired, so we should reset position to last vision positions.
     		//Otherwise the step in innovation may cause problems with transients in other states.
-    		ResetVisionPostion()
+    		ResetVisionPosition();
     	}
     	else
     	{
@@ -2515,7 +2515,7 @@ void NavEKF::FuseVisionPosNED()
 
     float maxVisionPosInnov2 = sq(_visionPosInnovGate * _visionHorizPosNoise);
 
-    float visionPosTestRatio = (sq(innovVisionPos[0]) + sq(innovVisionPos[1])) / maxPosInnov2;
+    float visionPosTestRatio = (sq(innovVisionPos[0]) + sq(innovVisionPos[1])) / maxVisionPosInnov2;
     visionPosHealth = ((visionPosTestRatio < 1.0f));
 
     if (visionPosHealth)
