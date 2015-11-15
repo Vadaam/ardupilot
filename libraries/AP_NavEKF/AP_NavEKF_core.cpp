@@ -139,6 +139,20 @@ void NavEKF_core::ResetPosition(void)
     lastPosReset_ms = imuSampleTime_ms;
 }
 
+// resets position states to last vision measurement
+void NavEKF_core::ResetVisionPosition(void)
+{
+    statesAtVisionPosTime.quat.rotation_matrix(Tbn_vision);
+	worldVisionPos = markerposNED - Tbn_vision*visionPosition;
+
+	// write to state vector
+	state.position.x = worldVisionPos[0];
+	state.position.y = worldVisionPos[1];
+	// the estimated states at the last vision measurement are set equal to the GPS measurement to prevent transients on the first fusion
+	statesAtVisionPosTime.position.x = worldVisionPos[0];
+	statesAtVisionPosTime.position.y = worldVisionPos[1];
+}
+
 // Reset velocity states to last GPS measurement if available or to zero if in constant position mode or if PV aiding is not absolute
 // Do not reset vertical velocity using GPS as there is baro alt available to constrain drift
 void NavEKF_core::ResetVelocity(void)
@@ -346,6 +360,11 @@ bool NavEKF_core::InitialiseFilterBootstrap(void)
     // set stored states to current state
     StoreStatesReset();
 
+	//calculate marker position in NED
+    markerposNED.x=frontend._markerPosX*cos(frontend._visionFrameYaw)+frontend._markerPosY*sin(frontend._visionFrameYaw);
+	markerposNED.y=frontend._markerPosX*sin(frontend._visionFrameYaw)+frontend._markerPosY*cos(frontend._visionFrameYaw);
+	markerposNED.z=0.0;
+
     // set to true now we have intialised the states
     statesInitialised = true;
 
@@ -442,6 +461,7 @@ void NavEKF_core::UpdateFilter()
     SelectVelPosFusion();
     SelectMagFusion();
     SelectFlowFusion();
+    SelectVisionPositionFusion();
     SelectTasFusion();
     SelectBetaFusion();
 
@@ -766,6 +786,52 @@ void NavEKF_core::SelectFlowFusion()
     hal.util->perf_end(_perf_FuseOptFlow);
 }
 
+void NavEKF_core::SelectVisionPositionFusion()
+{
+    // start performance timer
+	hal.util->perf_begin(_perf_FuseVisionPosNED);
+
+    // Check if the visual position data is still valid
+    visionPositionDataValid = ((imuSampleTime_ms - visionPosValidMeaTime_ms) < 1000);
+
+    // Check if the fusion has timed out (vision measurements have been rejected for too long)
+    bool visionFusionTimeout = ((imuSampleTime_ms - prevVisionFuseTime_ms) > 5000);
+
+    // determine if conditions are right to start a new fusion cycle
+    bool dataReady = statesInitialised && newDataVisionPosition && useVisionPosition() && visionPositionDataValid;
+    if (dataReady) {
+
+    	if (visionFusionTimeout)
+    	{
+    		//It means that vision target is re-acquired, so we should reset position to last vision positions.
+    		//Otherwise the step in innovation may cause problems with transients in other states.
+    		ResetVisionPosition();
+    	}
+    	else
+    	{
+			// ensure that the covariance prediction is up to date before fusing data
+			if (!covPredStep) CovariancePrediction();
+			// fuse the three magnetometer componenents sequentially
+			FuseVisionPosNED();
+			// reset flag to indicate that no new vision position data is available for fusion
+			newDataVisionPosition = false;
+			// indicate that flow fusion has been performed. This is used for load spreading.
+			visionPosFusePerformed = true;
+    	}
+    }
+
+    // Fuse corrections to quaternion, position and velocity states across several time steps to reduce 10Hz pulsing in the output
+//    if (visionPosUpdateCount < visionPosUpdateCountMax) {
+//    	visionPosUpdateCount ++;
+//        for (uint8_t i = 0; i <= 9; i++) {
+//            states[i] += visionPosIncrStateDelta[i];
+//        }
+//    }
+
+    // stop performance timer
+    hal.util->perf_end(_perf_FuseVisionPosNED);
+}
+
 // select fusion of true airspeed measurements
 void NavEKF_core::SelectTasFusion()
 {
@@ -871,7 +937,8 @@ void NavEKF_core::UpdateStrapdownEquationsNED()
     delVelNav2.z += delVelGravity2_z;
 
     // calculate the rate of change of velocity (used for launch detect and other functions)
-    velDotNED = delVelNav / dtDelVel;
+    if (dtDelVel!=0)
+    	velDotNED = delVelNav / dtDelVel;
 
     // apply a first order lowpass filter
     velDotNEDfilt = velDotNED * 0.05f + velDotNEDfilt * 0.95f;
@@ -2026,6 +2093,102 @@ void NavEKF_core::FuseVelPosNED()
     // force the covariance matrix to be symmetrical and limit the variances to prevent ill-condiioning.
     ForceSymmetry();
     ConstrainVariances();
+
+    // stop performance timer
+    hal.util->perf_end(_perf_FuseVelPosNED);
+}
+
+// fuse vision position measurements
+void NavEKF_core::FuseVisionPosNED()
+{
+    // start performance timer
+	hal.util->perf_begin(_perf_FuseVisionPosNED);
+
+    statesAtVisionPosTime.quat.rotation_matrix(Tbn_vision);
+
+	worldVisionPos = markerposNED - Tbn_vision*visionPosition;
+
+    uint8_t stateIndex;
+    uint8_t obsIndex;
+
+    // declare variables used by state and covariance update calculations
+    Vector3 R_OBS; // Measurement variances used for fusion
+    Vector3 observation;
+    float SK;
+
+    // if constant position or constant velocity mode use the current states to calculate the predicted
+    // measurement rather than use states from a previous time. We need to do this
+    // because there may be no stored states due to lack of real measurements.
+    if (constPosMode) {
+    	statesAtVisionPosTime = state;
+    }
+
+    observation[0] = worldVisionPos.x;
+    observation[1] = worldVisionPos.y;
+    observation[2] = worldVisionPos.z;
+
+    R_OBS[0] = sq(constrain_float(frontend._visionHorizPosNoise, 0.0f, 5.0f));
+    R_OBS[1] = R_OBS[0];
+    R_OBS[2] = sq(constrain_float(frontend._visionVerticalPosNoise,  0.0f, 5.0f));
+
+    for (obsIndex=0; obsIndex<=2; obsIndex++) {
+    	// calculate the measurement innovation, using states from a different time coordinate
+    	innovVisionPos[obsIndex] = statesAtVisionPosTime.position[obsIndex] - observation[obsIndex];
+    }
+
+    float maxVisionPosInnov2 = sq(frontend._visionPosInnovGate * frontend._visionHorizPosNoise);
+
+    float visionPosTestRatio = (sq(innovVisionPos[0]) + sq(innovVisionPos[1])) / maxVisionPosInnov2;
+    visionPosHealth = ((visionPosTestRatio < 1.0f));
+
+    if (visionPosHealth)
+    {
+    	prevVisionFuseTime_ms = imuSampleTime_ms;
+    	// fuse measurements sequentially
+		for (obsIndex=0; obsIndex<=2; obsIndex++) {
+
+			stateIndex = 7 + obsIndex;
+
+
+			// calculate the Kalman gain and calculate innovation variances
+			varInnovVisionPos[obsIndex] = P[stateIndex][stateIndex] + R_OBS[obsIndex];
+			SK = 1.0f/varInnovVisionPos[obsIndex];
+
+			for (uint8_t i= 0; i<=21; i++) {
+				Kfusion[i] = 0.0f;
+			}
+
+			for (uint8_t i= 7; i<=9; i++) {
+				Kfusion[i] = P[i][stateIndex]*SK;
+			}
+
+			// calculate state corrections
+			for (uint8_t i = 7; i<=9; i++) {
+				states[i] = states[i] - Kfusion[i] * innovVisionPos[obsIndex];
+
+			}
+			state.quat.normalize();
+
+			// update the covariance - take advantage of direct observation of a single state at index = stateIndex to reduce computations
+			// this is a numerically optimised implementation of standard equation P = (I - K*H)*P;
+			for (uint8_t i= 0; i<=21; i++) {
+				for (uint8_t j= 0; j<=21; j++)
+				{
+					KHP[i][j] = Kfusion[i] * P[stateIndex][j];
+				}
+			}
+			for (uint8_t i= 0; i<=21; i++) {
+				for (uint8_t j= 0; j<=21; j++) {
+					P[i][j] = P[i][j] - KHP[i][j];
+				}
+			}
+		}
+
+
+		// force the covariance matrix to be symmetrical and limit the variances to prevent ill-condiioning.
+		ForceSymmetry();
+		ConstrainVariances();
+    }
 
     // stop performance timer
     hal.util->perf_end(_perf_FuseVelPosNED);
@@ -3600,6 +3763,22 @@ void NavEKF_core::getFlowDebug(float &varFlow, float &gndOffset, float &flowInno
     gndOffsetErr = sqrtf(Popt); // note Popt is constrained to be non-negative in EstimateTerrainOffset()
 }
 
+// return data for debugging vision position fusion
+void NavEKF_core::getVisionPosDebug(float &posX, float &posY, float &posZ, float &posN, float &posE, float &posD, float &vpInnovX, float &vpInnovY, float &vpInnovZ, Matrix3f &R)
+{
+    posX = visionPosition.x;
+    posY = visionPosition.y;
+    posZ = visionPosition.z;
+    posN = worldVisionPos.x;
+    posE = worldVisionPos.y;
+    posD = worldVisionPos.z;
+    vpInnovX = innovVisionPos[0];
+    vpInnovY = innovVisionPos[1];
+    vpInnovZ = innovVisionPos[2];
+    R = Tbn_vision;
+
+}
+
 // calculate whether the flight vehicle is on the ground or flying from height, airspeed and GPS speed
 void NavEKF_core::SetFlightAndFusionModes()
 {
@@ -4168,6 +4347,17 @@ void NavEKF_core::writeOptFlowMeas(uint8_t &rawFlowQuality, Vector2f &rawFlowRat
     }
 }
 
+void  NavEKF_core::writeVisionPositionMeas(Vector3f &rawVisionPosition, Vector3f &rawVisionOrientation, uint64_t &msecVisionPositionMeas)
+{
+	visionPosition.x = rawVisionPosition.x;
+	visionPosition.y = rawVisionPosition.y;
+	visionPosition.z = rawVisionPosition.z;
+	newDataVisionPosition = true;
+	visionPosValidMeaTime_ms = imuSampleTime_ms;
+    // recall vehicle states at mid sample time for flow observations allowing for delays
+    RecallStates(statesAtVisionPosTime, imuSampleTime_ms - frontend._msecVisionDelay);
+}
+
 // calculate the NED earth spin vector in rad/sec
 void NavEKF_core::calcEarthRateNED(Vector3f &omega, int32_t latitude) const
 {
@@ -4537,6 +4727,12 @@ bool NavEKF_core::getVehicleArmStatus(void) const
 bool NavEKF_core::use_compass(void) const
 {
     return _ahrs->get_compass() && _ahrs->get_compass()->use_for_yaw();
+}
+
+// return true if we should use the vision position
+bool NavEKF_core::useVisionPosition(void) const
+{
+	return (bool) frontend._useVisionPosition;
 }
 
 /*
