@@ -275,10 +275,6 @@ case $FRAME in
         EXTRA_SIM="$EXTRA_SIM --frame=Gazebo"
         MODEL="$FRAME"
 	;;
-    CRRCSim-heli)
-	BUILD_TARGET="sitl-heli"
-        MODEL="$FRAME"
-	;;
     CRRCSim|last_letter*)
 	BUILD_TARGET="sitl"
         MODEL="$FRAME"
@@ -287,6 +283,10 @@ case $FRAME in
 	BUILD_TARGET="sitl"
         MODEL="$FRAME"
         check_jsbsim_version
+	;;
+    *-heli)
+	BUILD_TARGET="sitl-heli"
+        MODEL="$FRAME"
 	;;
     *)
         MODEL="$FRAME"
