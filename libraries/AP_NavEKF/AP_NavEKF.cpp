@@ -494,7 +494,7 @@ bool NavEKF::InitialiseFilterDynamic(void)
         core = new NavEKF_core(*this, _ahrs, _baro, _rng);
         if (core == nullptr) {
             _enable.set(0);
-            GCS_MAVLINK::send_statustext_all(MAV_SEVERITY_CRITICAL, "NavEKF: allocation failed");
+            GCS_MAVLINK::send_statustext_all(MAV_SEVERITY_CRITICAL, "NavEKF: Allocation failed");
             return false;
         }
     }
@@ -511,7 +511,7 @@ bool NavEKF::InitialiseFilterBootstrap(void)
         core = new NavEKF_core(*this, _ahrs, _baro, _rng);
         if (core == nullptr) {
             _enable.set(0);
-            GCS_MAVLINK::send_statustext_all(MAV_SEVERITY_CRITICAL, "NavEKF: allocation failed");
+            GCS_MAVLINK::send_statustext_all(MAV_SEVERITY_CRITICAL, "NavEKF: Allocation failed");
             return false;
         }
     }
