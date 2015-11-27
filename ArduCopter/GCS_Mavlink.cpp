@@ -1942,7 +1942,9 @@ void GCS_MAVLINK::handleMessage(mavlink_message_t* msg)
     }
 
     case MAVLINK_MSG_ID_ADSB_VEHICLE:
+#if ADSB_ENABLED == ENABLED
         copter.adsb.update_vehicle(msg);
+#endif
         break;
 
     }     // end switch
