@@ -377,6 +377,11 @@ private:
         uint32_t    time_ms;     // 1
     };
 
+    struct range_elements {
+        float       rng;         // 0
+        uint32_t    time_ms;     // 1
+    };
+
     struct tas_elements {
         float       tas;         // 0
         uint32_t    time_ms;     // 1
@@ -746,6 +751,9 @@ private:
     baro_elements baroDataNew;      // Baro data at the current time horizon
     baro_elements baroDataDelayed;  // Baro data at the fusion time horizon
     uint8_t baroStoreIndex;         // Baro data storage index
+    range_elements rangeDataNew;    // Range finder data at the current time horizon
+    range_elements rangeDataDelayed;// Range finder data at the fusion time horizon
+    uint8_t rangeStoreIndex;        // Range finder data storage index
     tas_elements tasDataNew;        // TAS data at the current time horizon
     tas_elements tasDataDelayed;    // TAS data at the fusion time horizon
     uint8_t tasStoreIndex;          // TAS data storage index
