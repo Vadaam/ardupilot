@@ -137,46 +137,6 @@ void NavEKF2_core::writeOptFlowMeas(uint8_t &rawFlowQuality, Vector2f &rawFlowRa
     }
 }
 
-// store OF data in a history array
-void NavEKF2_core::StoreOF()
-{
-    if (ofStoreIndex >= OBS_BUFFER_LENGTH) {
-        ofStoreIndex = 0;
-    }
-    storedOF[ofStoreIndex] = ofDataNew;
-    ofStoreIndex += 1;
-}
-
-// return newest un-used optical flow data that has fallen behind the fusion time horizon
-// if no un-used data is available behind the fusion horizon, return false
-bool NavEKF2_core::RecallOF()
-{
-    of_elements dataTemp;
-    of_elements dataTempZero;
-    dataTempZero.time_ms = 0;
-    uint32_t temp_ms = 0;
-    uint8_t bestIndex = 0;
-    for (uint8_t i=0; i<OBS_BUFFER_LENGTH; i++) {
-        dataTemp = storedOF[i];
-        // find a measurement older than the fusion time horizon that we haven't checked before
-        if (dataTemp.time_ms != 0 && dataTemp.time_ms <= imuDataDelayed.time_ms) {
-            // Find the most recent non-stale measurement that meets the time horizon criteria
-            if (((imuDataDelayed.time_ms - dataTemp.time_ms) < 500) && dataTemp.time_ms > temp_ms) {
-                ofDataDelayed = dataTemp;
-                temp_ms = dataTemp.time_ms;
-                bestIndex = i;
-            }
-        }
-    }
-    if (temp_ms != 0) {
-        // zero the time stamp for that piece of data so we won't use it again
-        storedOF[bestIndex]=dataTempZero;
-        return true;
-    } else {
-        return false;
-    }
-}
-
 /********************************************************
 *              VISION MEASUREMENTS                      *
 ********************************************************/
@@ -240,7 +200,6 @@ bool NavEKF2_core::RecallVP()
         return false;
     }
 }
-
 
 /********************************************************
 *                      MAGNETOMETER                     *
