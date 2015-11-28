@@ -1273,7 +1273,7 @@ void DataFlash_Class::Log_Write_EKF(AP_AHRS_NavEKF &ahrs, bool optFlowEnabled, b
 
             struct log_EKF6 pkt6 = {
                 LOG_PACKET_HEADER_INIT(LOG_EKF6_MSG),
-                time_us : hal.scheduler->micros64(),
+                time_us : AP_HAL::micros64(),
     			VPX : (float)(posX),
     			VPY : (float)(posY),
     			VPZ : (float)(posZ),
@@ -1568,7 +1568,7 @@ void DataFlash_Class::Log_Write_EKF2(AP_AHRS_NavEKF &ahrs, bool optFlowEnabled, 
 
         struct log_EKF6 pkt10 = {
             LOG_PACKET_HEADER_INIT(LOG_NKF0_MSG),
-            time_us : hal.scheduler->micros64(),
+            time_us : AP_HAL::micros64(),
 			VPX : (float)(posX),
 			VPY : (float)(posY),
 			VPZ : (float)(posZ),

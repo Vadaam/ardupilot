@@ -469,13 +469,6 @@ private:
     // return true if data found
     bool RecallOF();
 
-    // store vision data
-    void StoreVP();
-
-    // recall vision data at the fusion time horizon
-    // return true if data found
-    bool RecallVP();
-
     // calculate nav to body quaternions from body to nav rotation matrix
     void quat2Tbn(Matrix3f &Tbn, const Quaternion &quat) const;
 
@@ -821,7 +814,7 @@ private:
     float lastInnovation;
 
     //variables added for vision position fusion
-    vp_elements storedVP[OBS_BUFFER_LENGTH];    // VP data buffer
+    obs_ring_buffer_t<vp_elements> storedVP;   // VP data buffer
     vp_elements vpDataNew;          // VP data at the current time horizon
     vp_elements vpDataDelayed;      // VP data at the fusion time horizon
     uint8_t vpStoreIndex;           // VP data storage index

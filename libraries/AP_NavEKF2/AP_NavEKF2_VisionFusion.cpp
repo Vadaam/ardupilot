@@ -26,10 +26,6 @@ void NavEKF2_core::ResetVisionPosition(void)
     stateStruct.position.x = worldVisionPos.x;
     stateStruct.position.y = worldVisionPos.y;
 
-    for (uint8_t i=0; i<OBS_BUFFER_LENGTH; i++) {
-        storedVP[i].visionPosition.x = vpDataNew.visionPosition.x;
-        storedVP[i].visionPosition.y = vpDataNew.visionPosition.y;
-    }
     vpDataDelayed.visionPosition.x = vpDataNew.visionPosition.x;
     vpDataDelayed.visionPosition.y = vpDataNew.visionPosition.y;
 }
