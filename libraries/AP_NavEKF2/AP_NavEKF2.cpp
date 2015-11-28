@@ -419,6 +419,75 @@ const AP_Param::GroupInfo NavEKF2::var_info[] = {
     // @Units: %
     AP_GROUPINFO("CHECK_SCALE", 34, NavEKF2, _gpsCheckScaler, CHECK_SCALER_DEFAULT),
 
+    // @Param: USE_VIS_POS
+    // @DisplayName: Use a vision position
+    // @Description: This parameter controls using of vision position from mavling message to correct filter state
+    // @Values: 0:Don't use, 1:Use
+    // @User: Advanced
+    AP_GROUPINFO("USE_VIS_POS",    35, NavEKF2, _useVisionPosition, 1),
+
+    // @Param: VPOSNE_NOISE
+    // @DisplayName: Vision horizontal position measurement noise (m)
+    // @Description: This is the RMS value of noise in the vision horizontal position measurements. Increasing it reduces the weighting on these measurements.
+    // @Range: 0.1 10.0
+    // @Increment: 0.1
+    // @User: Advanced
+    // @Units: meters
+    AP_GROUPINFO("VPOSNE_NOISE",   36, NavEKF2, _visionHorizPosNoise, 0.1f),
+
+    // @Param: VPOSD_NOISE
+    // @DisplayName: Vision vertical position measurement noise (m)
+    // @Description: This is the RMS value of noise in the vision vertical position measurements. Increasing it reduces the weighting on these measurements.
+    // @Range: 0.1 10.0
+    // @Increment: 0.1
+    // @User: Advanced
+    // @Units: meters
+    AP_GROUPINFO("VPOSD_NOISE",    37, NavEKF2, _visionVerticalPosNoise, 0.1f),
+
+    // @Param: VP_YAW
+    // @DisplayName: The rotate angle of visual system coordinate frame relation on NED (rad)
+    // @Description: This angle is used to transform coordinates from visual system frame to NED
+    // @Range: 0.0 6.2832
+    // @Increment: 0.1
+    // @User: Advanced
+    // @Units: meters
+    AP_GROUPINFO("VP_YAW",    38, NavEKF2, _visionFrameYaw, 0.0f),
+
+    // @Param: VPM_X
+    // @DisplayName: The x position of visual marker
+    // @Description: The x position of visual marker in visual coordinate frame (m)
+    // @Range: -100.0 100.0
+    // @Increment: 0.1
+    // @User: Advanced
+    // @Units: meters
+    AP_GROUPINFO("VPM_X",    39, NavEKF2, _markerPosX, 0.0f),
+
+    // @Param: VPM_Y
+    // @DisplayName: The y position of visual marker
+    // @Description: The y position of visual marker in visual coordinate frame (m)
+    // @Range: -100.0 100.0
+    // @Increment: 0.1
+    // @User: Advanced
+    // @Units: meters
+    AP_GROUPINFO("VPM_Y",    40, NavEKF2, _markerPosY, 0.0f),
+
+    // @Param: VISION_DELAY
+    // @DisplayName: Vision measurement delay (msec)
+    // @Description: This is the number of msec that the vision messages lag behind the inertial measurements.
+    // @Range: 0 - 500
+    // @Increment: 10
+    // @User: Advanced
+    // @Units: milliseconds
+    AP_GROUPINFO("VISION_DELAY",    41, NavEKF2, _msecVisionDelay, 10.0f),
+
+    // @Param: VISPOS_GATE
+    // @DisplayName: Vision position measurement gate size
+    // @Description: This parameter sets the number of standard deviations applied to the vision position measurement innovation consistency check. Decreasing it makes it more likely that good measurements will be rejected. Increasing it makes it more likely that bad measurements will be accepted.
+    // @Range: 1 100
+    // @Increment: 1
+    // @User: Advanced
+    AP_GROUPINFO("VISPOS_GATE",    42, NavEKF2, _visionPosInnovGate, 10),
+
     AP_GROUPEND
 };
 
@@ -831,6 +900,15 @@ bool NavEKF2::use_compass(void) const
     return core[primary].use_compass();
 }
 
+// return true if we should use the vision position
+bool NavEKF2::useVisionPosition(void) const
+{
+    if (!core) {
+        return false;
+    }
+    return core[primary].useVisionPosition();
+}
+
 // write the raw optical flow measurements
 // rawFlowQuality is a measured of quality between 0 and 255, with 255 being the best quality
 // rawFlowRates are the optical flow rates in rad/sec about the X and Y sensor axes.
@@ -853,6 +931,24 @@ void NavEKF2::getFlowDebug(int8_t instance, float &varFlow, float &gndOffset, fl
     if (instance < 0 || instance >= num_cores) instance = primary;
     if (core) {
         core[instance].getFlowDebug(varFlow, gndOffset, flowInnovX, flowInnovY, auxInnov, HAGL, rngInnov, range, gndOffsetErr);
+    }
+}
+
+void  NavEKF2::writeVisionPositionMeas(Vector3f &rawVisionPosition, Vector3f &rawVisionOrientation, uint64_t &msecVisionPositionMeas)
+{
+	if (core) {
+		for (uint8_t i=0; i<num_cores; i++) {
+	        core[i].writeVisionPositionMeas(rawVisionPosition, rawVisionOrientation, msecVisionPositionMeas);
+		}
+	}
+}
+
+// return data for debugging vision position fusion
+void NavEKF2::getVisionPosDebug(int8_t instance, float &posX, float &posY, float &posZ, float &posN, float &posE, float &posD, float &vpInnovX, float &vpInnovY, float &vpInnovZ, Matrix3f &R)
+{
+	if (instance < 0 || instance >= num_cores) instance = primary;
+	if (core) {
+        core[instance].getVisionPosDebug(posX, posY, posZ, posN, posE, posD, vpInnovX, vpInnovY, vpInnovZ, R);
     }
 }
 

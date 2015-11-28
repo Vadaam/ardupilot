@@ -284,6 +284,11 @@ bool NavEKF2_core::InitialiseFilterBootstrap(void)
     readHgtData();
     ResetHeight();
 
+	//calculate marker position in NED
+    markerposNED.x=frontend->_markerPosX*cos(frontend->_visionFrameYaw)+frontend->_markerPosY*sin(frontend->_visionFrameYaw);
+	markerposNED.y=frontend->_markerPosX*sin(frontend->_visionFrameYaw)+frontend->_markerPosY*cos(frontend->_visionFrameYaw);
+	markerposNED.z=0.0;
+
     // define Earth rotation vector in the NED navigation frame
     calcEarthRateNED(earthRateNED, _ahrs->get_home().lat);
 
@@ -404,6 +409,9 @@ void NavEKF2_core::UpdateFilter(bool predict)
 
         // Update states using optical flow data
         SelectFlowFusion();
+
+        // Update states using vision measurement
+        SelectVisionPositionFusion();
 
         // Update states using airspeed data
         SelectTasFusion();

@@ -139,6 +139,8 @@ public:
     // write optical flow measurements to EKF
     void writeOptFlowMeas(uint8_t &rawFlowQuality, Vector2f &rawFlowRates, Vector2f &rawGyroRates, uint32_t &msecFlowMeas);
 
+    void  writeVisionPositionMeas(Vector3f &rawVisionPosition, Vector3f &rawVisionOrientation, uint64_t &msecVisionPositionMeas);
+
     // inibit GPS useage
     uint8_t setInhibitGPS(void);
 

@@ -760,7 +760,7 @@ const struct LogStructure Copter::log_structure[] = {
     { LOG_HELI_MSG, sizeof(log_Heli),
       "HELI",  "Qhh",         "TimeUS,DRRPM,ERRPM" },
     { LOG_PRECLAND_MSG, sizeof(log_Precland),
-      "PL",    "QBffffff",    "TimeUS,Heal,bX,bY,eX,eY,pX,pY" },
+      "PL",    "QBffffff",    "TimeUS,Heal,bX,bY,eX,eY,pX,pY" }
 };
 
 #if CLI_ENABLED == ENABLED

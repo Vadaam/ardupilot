@@ -163,6 +163,69 @@ bool NavEKF2_core::RecallOF()
     }
 }
 
+/********************************************************
+*              VISION MEASUREMENTS                      *
+********************************************************/
+
+void  NavEKF2_core::writeVisionPositionMeas(Vector3f &rawVisionPosition, Vector3f &rawVisionOrientation, uint64_t &msecVisionPositionMeas)
+{
+	vpDataNew.visionPosition.x = rawVisionPosition.x;
+	vpDataNew.visionPosition.y = rawVisionPosition.y;
+	vpDataNew.visionPosition.z = rawVisionPosition.z;
+
+	visionPosValidMeaTime_ms = imuSampleTime_ms;
+
+    // estimate sample time of the measurement
+    vpDataNew.time_ms = imuSampleTime_ms - frontend->_msecVisionDelay;
+    // Correct for the average intersampling delay due to the filter updaterate
+    vpDataNew.time_ms -= localFilterTimeStep_ms/2;
+    // Prevent time delay exceeding age of oldest IMU data in the buffer
+    vpDataNew.time_ms = max(vpDataNew.time_ms,imuDataDelayed.time_ms);
+    // Save data to buffer
+    StoreVP();
+    // Check for data at the fusion time horizon
+	newDataVisionPosition = RecallVP();
+}
+
+// store vision data in a history array
+void NavEKF2_core::StoreVP()
+{
+    if (vpStoreIndex >= VP_BUFFER_LENGTH) {
+        vpStoreIndex = 0;
+    }
+    storedVP[vpStoreIndex] = vpDataNew;
+    vpStoreIndex += 1;
+}
+
+// return newest un-used vision data that has fallen behind the fusion time horizon
+// if no un-used data is available behind the fusion horizon, return false
+bool NavEKF2_core::RecallVP()
+{
+    vp_elements dataTemp;
+    vp_elements dataTempZero;
+    dataTempZero.time_ms = 0;
+    uint32_t temp_ms = 0;
+    uint8_t bestIndex = 0;
+    for (uint8_t i=0; i<VP_BUFFER_LENGTH; i++) {
+        dataTemp = storedVP[i];
+        // find a measurement older than the fusion time horizon that we haven't checked before
+        if (dataTemp.time_ms != 0 && dataTemp.time_ms <= imuDataDelayed.time_ms) {
+            // Find the most recent non-stale measurement that meets the time horizon criteria
+            if (((imuDataDelayed.time_ms - dataTemp.time_ms) < 500) && dataTemp.time_ms > temp_ms) {
+                vpDataDelayed = dataTemp;
+                temp_ms = dataTemp.time_ms;
+                bestIndex = i;
+            }
+        }
+    }
+    if (temp_ms != 0) {
+        // zero the time stamp for that piece of data so we won't use it again
+        storedVP[bestIndex]=dataTempZero;
+        return true;
+    } else {
+        return false;
+    }
+}
 
 
 /********************************************************

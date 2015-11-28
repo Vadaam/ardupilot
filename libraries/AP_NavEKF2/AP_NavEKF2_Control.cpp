@@ -214,6 +214,12 @@ bool NavEKF2_core::use_compass(void) const
     return _ahrs->get_compass() && _ahrs->get_compass()->use_for_yaw(magSelectIndex);
 }
 
+// return true if we should use the vision position
+bool NavEKF2_core::useVisionPosition(void) const
+{
+	return (bool) frontend->_useVisionPosition;
+}
+
 /*
   should we assume zero sideslip?
  */

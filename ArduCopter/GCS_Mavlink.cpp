@@ -1764,11 +1764,13 @@ void GCS_MAVLINK::handleMessage(mavlink_message_t* msg)
     }
 #endif //  HIL_MODE != HIL_MODE_DISABLED
 
+#if AP_AHRS_NAVEKF_AVAILABLE
     case MAVLINK_MSG_ID_VISION_POSITION_ESTIMATE:      // MAV ID: 102
     {
-     	handle_vision_position_estimate(msg, copter.EKF);
+     	handle_vision_position_estimate(msg, copter.ahrs);
         break;
     }
+#endif
 
     case MAVLINK_MSG_ID_RADIO:
     case MAVLINK_MSG_ID_RADIO_STATUS:       // MAV ID: 109

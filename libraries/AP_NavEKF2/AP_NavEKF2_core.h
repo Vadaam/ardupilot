@@ -191,6 +191,9 @@ public:
     // reporting via ahrs.use_compass()
     bool use_compass(void) const;
 
+    // return true if we should use the vision position
+    bool useVisionPosition(void) const;
+
     // write the raw optical flow measurements
     // rawFlowQuality is a measured of quality between 0 and 255, with 255 being the best quality
     // rawFlowRates are the optical flow rates in rad/sec about the X and Y sensor axes.
@@ -201,6 +204,12 @@ public:
 
     // return data for debugging optical flow fusion
     void getFlowDebug(float &varFlow, float &gndOffset, float &flowInnovX, float &flowInnovY, float &auxInnov, float &HAGL, float &rngInnov, float &range, float &gndOffsetErr) const;
+
+    void  writeVisionPositionMeas(Vector3f &rawVisionPosition, Vector3f &rawVisionOrientation, uint64_t &msecVisionPositionMeas);
+
+    // return data for debugging vision position fusion
+    void getVisionPosDebug(float &posX, float &posY, float &posZ, float &posN, float &posE, float &posD, float &vpInnovX, float &vpInnovY, float &vpInnovZ, Matrix3f &R);
+
 
     // called by vehicle code to specify that a takeoff is happening
     // causes the EKF to compensate for expected barometer errors due to ground effect
@@ -394,6 +403,11 @@ private:
         uint32_t    time_ms;        // 4
     };
 
+    struct vp_elements {
+        Vector3f    visionPosition;      // 0..3
+        uint32_t    time_ms;        // 4
+    };
+
     // update the quaternion, velocity and position states using IMU measurements
     void UpdateStrapdownEquationsNED();
 
@@ -423,6 +437,9 @@ private:
 
     // fuse sythetic sideslip measurement of zero
     void FuseSideslip();
+
+    // fuse vision position measurements
+    void FuseVisionPosNED();
 
     // zero specified range of rows in the state covariance matrix
     void zeroRows(Matrix24 &covMat, uint8_t first, uint8_t last);
@@ -489,6 +506,13 @@ private:
     // return true if data found
     bool RecallOF();
 
+    // store vision data
+    void StoreVP();
+
+    // recall vision data at the fusion time horizon
+    // return true if data found
+    bool RecallVP();
+
     // calculate nav to body quaternions from body to nav rotation matrix
     void quat2Tbn(Matrix3f &Tbn, const Quaternion &quat) const;
 
@@ -529,6 +553,9 @@ private:
     // determine when to perform fusion of synthetic sideslp measurements
     void SelectBetaFusion();
 
+    // determine when to perform fusion of vision measurements
+    void SelectVisionPositionFusion();
+
     // force alignment of the yaw angle using GPS velocity data
     void alignYawGPS();
 
@@ -541,6 +568,9 @@ private:
 
     // reset the horizontal position states uing the last GPS measurement
     void ResetPosition(void);
+
+    // resets position states to last vision measurement
+    void ResetVisionPosition(void);
 
     // reset velocity states using the last GPS measurement
     void ResetVelocity(void);
@@ -636,6 +666,7 @@ private:
     // Length of FIFO buffers used for non-IMU sensor data.
     // Must be larger than the time period defined by IMU_BUFFER_LENGTH
     static const uint32_t OBS_BUFFER_LENGTH = 5;
+    static const uint32_t VP_BUFFER_LENGTH = 10;
 
     // Variables
     bool statesInitialised;         // boolean true when filter states have been initialised
@@ -820,8 +851,31 @@ private:
     float innovationIncrement;
     float lastInnovation;
 
+    //variables added for vision position fusion
+    vp_elements storedVP[OBS_BUFFER_LENGTH];    // VP data buffer
+    vp_elements vpDataNew;          // VP data at the current time horizon
+    vp_elements vpDataDelayed;      // VP data at the fusion time horizon
+    uint8_t vpStoreIndex;           // VP data storage index
+    bool newDataVisionPosition;     // true when new vision position data has arrived
+    bool fuseVisionPositionData;    // this boolean causes the last vision position measurement to be fused
+    Vector3f visionPosition; 		// marker vision position in camera (body) frame (m)
+    Vector3f worldVisionPos;		// vision position in NED frame (m)
+    state_elements statesAtVisionPosTime; // States at the effective time of vision posNE measurements
+    Vector3 innovVisionPos;            // innovation output for a group of measurements
+    Vector3 varInnovVisionPos;         // innovation variance output for a group of measurements
+    uint32_t visionPosValidMeaTime_ms;   // time stamp from latest valid vision measurement (msec)
+    uint32_t prevVisionFuseTime_ms;   // time vision measurement components passed their innovation consistency checks
+    bool visionPositionDataValid;             // true while optical flow data is still fresh
+    uint8_t visionPosUpdateCount;        // count of the number of minor state corrections using vision position data
+    uint8_t visionPosUpdateCountMax;     // limit on the number of minor state corrections using vision position data
+    Vector3 visionPosIncrStateDelta;   // vector of corrections to position to be applied over the period between the current and next vision position measurement
+    bool visionPosFusePerformed; 	// true when vision position fusion has been performed in that time step
+    Vector3f markerposNED;
+    Matrix3f Tbn_vision;
+    bool visionPosHealth;
+
     // variables added for optical flow fusion
-    of_elements storedOF[OBS_BUFFER_LENGTH];    // OF data buffer
+    of_elements storedOF[VP_BUFFER_LENGTH];    // OF data buffer
     of_elements ofDataNew;          // OF data at the current time horizon
     of_elements ofDataDelayed;      // OF data at the fusion time horizon
     uint8_t ofStoreIndex;           // OF data storage index
@@ -944,6 +998,7 @@ private:
     AP_HAL::Util::perf_counter_t  _perf_FuseSideslip;
     AP_HAL::Util::perf_counter_t  _perf_TerrainOffset;
     AP_HAL::Util::perf_counter_t  _perf_FuseOptFlow;
+    AP_HAL::Util::perf_counter_t  _perf_FuseVisionPosNED;
     AP_HAL::Util::perf_counter_t  _perf_test[10];
 
     // should we assume zero sideslip?

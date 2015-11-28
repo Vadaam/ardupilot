@@ -100,7 +100,7 @@ public:
     void Log_Write_POS(AP_AHRS &ahrs);
 #if AP_AHRS_NAVEKF_AVAILABLE
     void Log_Write_EKF(AP_AHRS_NavEKF &ahrs, bool optFlowEnabled, bool visionPosEnabled=false);
-    void Log_Write_EKF2(AP_AHRS_NavEKF &ahrs, bool optFlowEnabled);
+    void Log_Write_EKF2(AP_AHRS_NavEKF &ahrs, bool optFlowEnabled, bool visionPosEnabled=false);
 #endif
     bool Log_Write_MavCmd(uint16_t cmd_total, const mavlink_mission_item_t& mav_cmd);
     void Log_Write_Radio(const mavlink_radio_t &packet);
@@ -863,6 +863,8 @@ Format characters in the format string for binary log messages
       "NKF8","Qcccccchhhcc","TimeUS,IVN,IVE,IVD,IPN,IPE,IPD,IMX,IMY,IMZ,IYAW,IVT" }, \
     { LOG_NKF9_MSG, sizeof(log_NKF4), \
       "NKF9","QcccccfbbBBHHb","TimeUS,SV,SP,SH,SM,SVT,errRP,OFN,OFE,FS,TS,SS,GPS,PI" }, \
+	{ LOG_NKF0_MSG, sizeof(log_EKF6), \
+	  "NKF0","Qffffffffffff","TimeUS,VPX,VPY,VPZ,VPN,VPE,VPD,VIX,VIY,VIZ,RL,PT,YAW" },  \
     { LOG_TERRAIN_MSG, sizeof(log_TERRAIN), \
       "TERR","QBLLHffHH","TimeUS,Status,Lat,Lng,Spacing,TerrH,CHeight,Pending,Loaded" }, \
     { LOG_GPS_UBX1_MSG, sizeof(log_Ubx1), \
@@ -1027,6 +1029,7 @@ enum LogMessages {
     LOG_NKF7_MSG,
     LOG_NKF8_MSG,
     LOG_NKF9_MSG,
+	LOG_NKF0_MSG,
 };
 
 enum LogOriginType {

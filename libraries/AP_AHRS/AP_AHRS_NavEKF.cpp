@@ -667,6 +667,12 @@ void  AP_AHRS_NavEKF::writeOptFlowMeas(uint8_t &rawFlowQuality, Vector2f &rawFlo
     EKF2.writeOptFlowMeas(rawFlowQuality, rawFlowRates, rawGyroRates, msecFlowMeas);
 }
 
+void  AP_AHRS_NavEKF::writeVisionPositionMeas(Vector3f &rawVisionPosition, Vector3f &rawVisionOrientation, uint64_t &msecVisionPositionMeas)
+{
+	EKF1.writeVisionPositionMeas(rawVisionPosition, rawVisionOrientation, msecVisionPositionMeas);
+	EKF2.writeVisionPositionMeas(rawVisionPosition, rawVisionOrientation, msecVisionPositionMeas);
+}
+
 // inhibit GPS useage
 uint8_t AP_AHRS_NavEKF::setInhibitGPS(void)
 {

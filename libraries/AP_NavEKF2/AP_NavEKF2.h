@@ -181,6 +181,9 @@ public:
     // reporting via ahrs.use_compass()
     bool use_compass(void) const;
 
+    // return true if we should use the vision position
+    bool useVisionPosition(void) const;
+
     // write the raw optical flow measurements
     // rawFlowQuality is a measured of quality between 0 and 255, with 255 being the best quality
     // rawFlowRates are the optical flow rates in rad/sec about the X and Y sensor axes.
@@ -192,6 +195,12 @@ public:
     // return data for debugging optical flow fusion for the specified instance
     // An out of range instance (eg -1) returns data for the the primary instance
     void getFlowDebug(int8_t instance, float &varFlow, float &gndOffset, float &flowInnovX, float &flowInnovY, float &auxInnov, float &HAGL, float &rngInnov, float &range, float &gndOffsetErr);
+
+    void  writeVisionPositionMeas(Vector3f &rawVisionPosition, Vector3f &rawVisionOrientation, uint64_t &msecVisionPositionMeas);
+
+    // return data for debugging vision position fusion
+    void getVisionPosDebug(int8_t instance, float &posX, float &posY, float &posZ, float &posN, float &posE, float &posD, float &vpInnovX, float &vpInnovY, float &vpInnovZ, Matrix3f &R);
+
 
     // called by vehicle code to specify that a takeoff is happening
     // causes the EKF to compensate for expected barometer errors due to ground effect
@@ -311,6 +320,14 @@ private:
     AP_Int8 _gpsCheck;              // Bitmask controlling which preflight GPS checks are bypassed
     AP_Int8 _imuMask;               // Bitmask of IMUs to instantiate EKF2 for
     AP_Int16 _gpsCheckScaler;       // Percentage increase to be applied to GPS pre-flight accuracy and drift thresholds
+    AP_Int8 _useVisionPosition;     // 0 - don't use vision position to coorect state 1 - use
+    AP_Float _visionHorizPosNoise;  // vision horizontal position measurement noise m
+    AP_Float _visionVerticalPosNoise;// vision vertical position measurement noise m
+    AP_Float _visionFrameYaw;		// yaw angle between vision system frame and NED rad
+    AP_Float _markerPosX;			// x position marker in vision frame
+    AP_Float _markerPosY;			// y position marker in vision frame
+    AP_Float _msecVisionDelay; 		// effective average delay of vision measurements rel to IMU (msec)
+    AP_Int8  _visionPosInnovGate;   // Number of standard deviations applied to vision position innovation consistency check
 
     // Tuning parameters
     const float gpsNEVelVarAccScale;    // Scale factor applied to NE velocity measurement variance due to manoeuvre acceleration
@@ -339,6 +356,7 @@ private:
     const float gndEffectBaroScaler;    // scaler applied to the barometer observation variance when ground effect mode is active
     const uint8_t gndGradientSigma;     // RMS terrain gradient percentage assumed by the terrain height estimation
     const uint8_t fusionTimeStep_ms;    // The minimum time interval between covariance predictions and measurement fusions in msec
+
 };
 
 #endif //AP_NavEKF2
