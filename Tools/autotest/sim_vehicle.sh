@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/bash -ex
 
 # home location lat, lon, alt, heading
 LOCATION="CMAC"
@@ -169,9 +169,9 @@ kill_tasks()
 {
     [ "$INSTANCE" -eq "0" ] && {
 	for pname in JSBSim lt-JSBSim ArduPlane.elf ArduCopter.elf APMrover2.elf AntennaTracker.elf JSBSIm.exe MAVProxy.exe; do
-	    pkill "$pname"
+	    pkill "$pname" || echo -e "\tpkill failed"
 	done
-        pkill -f runsim.py
+        pkill -f runsim.py || echo -e "\tpkill failed"
     }
 }
 
@@ -459,9 +459,9 @@ case $FRAME in
 esac
 
 if [ -f /usr/bin/cygstart ]; then
-    cygstart -w "/cygdrive/c/Program Files (x86)/MAVProxy/mavproxy.exe" $options --cmd="$extra_cmd" $*
+    cygstart -w "/cygdrive/c/Program Files (x86)/MAVProxy/mavproxy.exe" $options --logfile /tmp/log.tlog --cmd="$extra_cmd" $*
 else
-    mavproxy.py $options --cmd="$extra_cmd" $*
+    mavproxy.py $options --cmd="$extra_cmd" $* --logfile /tmp/log
 fi
 
 if [ $START_HIL == 0 ]; then
